@@ -10,7 +10,11 @@ Build and run:
 cd app
 swiftc -warnings-as-errors -O main.swift -o one-more-puzzle
 ./one-more-puzzle --from COLD --to WARM
+printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WARM --play
 ./one-more-puzzle --self-test
+sh ../tests/test_play.sh
 ```
 
 The program uses Swift Foundation and no packages, network access, system dictionaries, or external data. Errors explain unknown words, mismatched lengths, non-ASCII input, and unreachable pairs.
+
+With `--play`, submit one next word per line. `hint` suggests the next shortest-path word without moving, `undo` returns to the previous word, and `quit` or EOF ends cleanly. Invalid moves do not advance the puzzle; a victory summary reports valid moves and hints.
