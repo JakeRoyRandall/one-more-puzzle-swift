@@ -46,23 +46,41 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank) 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool) {
-    var from: String?, to: String?, selfTest = false, play = false; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool) {
+    var from: String?, to: String?, selfTest = false, play = false, html: String?, force = false; var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
         case "--to": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--to") }; to = arguments[index]
         case "--self-test": selfTest = true
         case "--play": play = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--play]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --play to submit words interactively. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
+        case "--force": force = true
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--play | --html FILE] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --play to submit words interactively or --html to export a printable page. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
-    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false) }
+    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false) }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
-    return (start, goal, selfTest, play)
+    if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
+    return (start, goal, selfTest, play, html, force)
+}
+
+func htmlEscape(_ value: String) -> String { value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;") }
+func htmlLadder(_ path: [String]) -> String {
+    let tiles = path.enumerated().map { offset, word in
+        let previous = offset > 0 ? Array(path[offset - 1]) : []
+        let letters = Array(word).enumerated().map { index, letter in
+            let marked = offset > 0 && index < previous.count && previous[index] != letter
+            return marked ? "<span class=\"changed\">\(htmlEscape(String(letter)))</span>" : htmlEscape(String(letter))
+        }.joined()
+        return "<li><span class=\"step\">\(offset == 0 ? "START" : String(offset))</span><span class=\"word\">\(letters)</span></li>"
+    }.joined(separator: "\n")
+    return """
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>One More Puzzle · \(htmlEscape(path.first!)) → \(htmlEscape(path.last!))</title><style> :root{--ink:#10271b;--green:#1c5b3a;--paper:#f6f2e7;--rule:#173b28}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Georgia,serif;background-image:repeating-linear-gradient(0deg,#10271b08 0,#10271b08 1px,transparent 1px,transparent 5px)}main{max-width:760px;margin:0 auto;padding:54px 34px}.mast{border-top:8px solid var(--green);border-bottom:3px solid var(--green);padding:18px 0 22px}.kicker{font:700 12px "Courier New",monospace;letter-spacing:.18em;color:var(--green)}h1{font-size:clamp(48px,9vw,88px);line-height:.82;letter-spacing:-.06em;margin:18px 0 12px}h1 em{color:var(--green);font-style:normal}.dek{font-size:18px;line-height:1.45;max-width:600px}.badge{display:inline-block;border:2px solid var(--green);padding:8px 10px;font:700 11px "Courier New",monospace;transform:rotate(-2deg)}ol{list-style:none;margin:34px 0;padding:0;border-left:3px solid var(--green)}li{display:flex;align-items:center;gap:18px;padding:11px 0 11px 20px}.step{width:58px;color:var(--green);font:700 11px "Courier New",monospace}.word{font:700 clamp(30px,7vw,58px)/1 "Courier New",monospace;letter-spacing:.08em}.changed{color:white;background:var(--green);padding:0 .08em}.note{border-top:2px solid var(--green);padding-top:16px;font:12px/1.5 "Courier New",monospace}.foot{margin-top:42px;border-top:1px solid var(--rule);padding-top:12px;font:11px/1.5 "Courier New",monospace}@media print{body{background:#fff}main{padding:20px}.foot{margin-top:20px}}</style></head><body><main><header class="mast"><div class="kicker">ONE MORE PUZZLE · COUCH CLUB EDITION</div><h1>Change one<br><em>letter.</em></h1><p class="dek">A newspaper puzzle for a stay-at-home year. Follow the shortest route from <b>\(htmlEscape(path.first!.uppercased()))</b> to <b>\(htmlEscape(path.last!.uppercased()))</b>.</p><span class="badge">\(path.count - 1) STEPS</span></header><ol>\(tiles)</ol><p class="note">Green tiles mark the letter changed on each step. The word bank is a small curated puzzle set, not a complete English dictionary.</p><footer class="foot">Created retrospectively in September 2026 as a fictional 2020-inspired art project. No network or external assets.</footer></main></body></html>
+"""
 }
 
 func playGame(from start: String, to target: String) {
@@ -85,6 +103,7 @@ func playGame(from start: String, to target: String) {
 }
 
 func selfTest() -> Bool {
+    guard htmlEscape("<tag & \"quote\">") == "&lt;tag &amp; &quot;quote&quot;&gt;" else { return false }
     guard neighbors(of: "cold").contains("cord") else { return false }
     guard (try? ladder(from: "cold", to: "warm")) == ["cold", "cord", "card", "ward", "warm"] else { return false }
     guard (try? ladder(from: "cat", to: "cat")) == ["cat"] else { return false }
@@ -100,6 +119,12 @@ do {
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
     if options.3 { _ = try ladder(from: options.0, to: options.1); playGame(from: options.0, to: options.1); exit(0) }
     let path = try ladder(from: options.0, to: options.1)
+    if let htmlPath = options.4 {
+        if FileManager.default.fileExists(atPath: htmlPath) && !options.5 { throw NSError(domain: "OneMorePuzzle", code: 5, userInfo: [NSLocalizedDescriptionKey: "HTML file already exists; pass --force to overwrite"]) }
+        do { try htmlLadder(path).write(toFile: htmlPath, atomically: true, encoding: .utf8) } catch { throw NSError(domain: "OneMorePuzzle", code: 6, userInfo: [NSLocalizedDescriptionKey: "could not write HTML file: \(error.localizedDescription)"]) }
+        print("HTML written to \(htmlPath) · \(path.count - 1) steps")
+        exit(0)
+    }
     print("COUCH CLUB WORD LADDER")
     print("\(path.first!.uppercased()) → \(path.last!.uppercased()) · \(path.count - 1) steps")
     print(path.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))

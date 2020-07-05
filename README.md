@@ -11,10 +11,14 @@ cd app
 swiftc -warnings-as-errors -O main.swift -o one-more-puzzle
 ./one-more-puzzle --from COLD --to WARM
 printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WARM --play
+./one-more-puzzle --from COLD --to WARM --html ladder.html
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
+sh ../tests/test_html.sh
 ```
 
 The program uses Swift Foundation and no packages, network access, system dictionaries, or external data. Errors explain unknown words, mismatched lengths, non-ASCII input, and unreachable pairs.
 
 With `--play`, submit one next word per line. `hint` suggests the next shortest-path word without moving, `undo` returns to the previous word, and `quit` or EOF ends cleanly. Invalid moves do not advance the puzzle; a victory summary reports valid moves and hints.
+
+`--html FILE` exports a standalone printable newspaper-style ladder page with one tile per word and the changed letter highlighted in forest green. It works for three-letter, four-letter, and same-word ladders, refuses to overwrite an existing file unless `--force` is supplied, and cannot be combined with `--play`.
