@@ -46,26 +46,41 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank) 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool) {
-    var from: String?, to: String?, selfTest = false, play = false, html: String?, force = false; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool) {
+    var from: String?, to: String?, selfTest = false, play = false, html: String?, force = false, json = false; var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
         case "--to": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--to") }; to = arguments[index]
         case "--self-test": selfTest = true
         case "--play": play = true
+        case "--json": json = true
         case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
         case "--force": force = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--play | --html FILE] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --play to submit words interactively or --html to export a printable page. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--play | --html FILE | --json] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
-    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false) }
+    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false) }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
     if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
-    return (start, goal, selfTest, play, html, force)
+    if json && (play || html != nil) { throw LadderError.missingOption("--json cannot be combined with --play or --html") }
+    return (start, goal, selfTest, play, html, force, json)
+}
+
+func jsonEscape(_ value: String) -> String {
+    value.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+        .replacingOccurrences(of: "\n", with: "\\n")
+        .replacingOccurrences(of: "\r", with: "\\r")
+        .replacingOccurrences(of: "\t", with: "\\t")
+}
+
+func jsonLadder(_ path: [String]) -> String {
+    let words = path.map { "\"\(jsonEscape($0))\"" }.joined(separator: ",")
+    return "{\"schema_version\":1,\"from\":\"\(jsonEscape(path.first!))\",\"to\":\"\(jsonEscape(path.last!))\",\"steps\":\(path.count - 1),\"words\":[\(words)]}"
 }
 
 func htmlEscape(_ value: String) -> String { value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;") }
@@ -119,6 +134,7 @@ do {
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
     if options.3 { _ = try ladder(from: options.0, to: options.1); playGame(from: options.0, to: options.1); exit(0) }
     let path = try ladder(from: options.0, to: options.1)
+    if options.6 { print(jsonLadder(path)); exit(0) }
     if let htmlPath = options.4 {
         if FileManager.default.fileExists(atPath: htmlPath) && !options.5 { throw NSError(domain: "OneMorePuzzle", code: 5, userInfo: [NSLocalizedDescriptionKey: "HTML file already exists; pass --force to overwrite"]) }
         do { try htmlLadder(path).write(toFile: htmlPath, atomically: true, encoding: .utf8) } catch { throw NSError(domain: "OneMorePuzzle", code: 6, userInfo: [NSLocalizedDescriptionKey: "could not write HTML file: \(error.localizedDescription)"]) }
