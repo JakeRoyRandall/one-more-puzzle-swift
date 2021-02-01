@@ -13,6 +13,7 @@ assert r == {
     'from': 'cold',
     'to': 'warm',
     'steps': 4,
+    'max_steps': None,
     'words': ['cold', 'cord', 'card', 'ward', 'warm'],
 }
 PY

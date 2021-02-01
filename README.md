@@ -14,6 +14,7 @@ printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WAR
 ./one-more-puzzle --from COLD --to WARM --html ladder.html
 ./one-more-puzzle --from COLD --to WARM --json
 ./one-more-puzzle --from COLD --to WARM --avoid CORD
+./one-more-puzzle --from COLD --to WARM --max-steps 4
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
 sh ../tests/test_html.sh
@@ -30,3 +31,5 @@ With `--play`, submit one next word per line. `hint` suggests the next shortest-
 `--json` prints one valid machine-readable object containing `schema_version`, `from`, `to`, `steps`, and the complete `words` array. It is mutually exclusive with `--play` and `--html`; the output describes this same curated shortest path and is not a dictionary or proof of linguistic optimality beyond the built-in word graph.
 
 Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the graph. Exclusions apply to text, JSON, HTML, play moves, and hints; unknown, non-ASCII, and endpoint exclusions are errors. Repeating a word is harmless and counts once. The list is intentionally small, so avoiding a bridge may make a pair unreachable.
+
+`--max-steps N` bounds the shortest path to `0..32` letter changes. A same-word puzzle succeeds with zero, while a route needing more steps is unreachable. In `--play`, undo restores the available budget; hints search only within the remaining steps, and an exhausted budget reports a clear message.
