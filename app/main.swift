@@ -69,8 +69,8 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank, 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?) {
-    var from: String?, to: String?, via: String?, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?, String?) {
+    var from: String?, to: String?, via: String?, neighborsWord: String?, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
@@ -83,6 +83,14 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
             guard word.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
             guard wordBank.contains(word) else { throw LadderError.unknownWord(word) }
             via = word
+        case "--neighbors":
+            index += 1
+            guard index < arguments.count else { throw LadderError.missingOption("--neighbors") }
+            guard neighborsWord == nil else { throw LadderError.missingOption("duplicate --neighbors") }
+            let word = arguments[index].lowercased()
+            guard word.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
+            guard wordBank.contains(word) else { throw LadderError.unknownWord(word) }
+            neighborsWord = word
         case "--self-test": selfTest = true
         case "--play": play = true
         case "--json": json = true
@@ -103,17 +111,21 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
             maxSteps = value
         case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
         case "--force": force = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE | --json] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE | --json] [--force]\n       one-more-puzzle --neighbors WORD [--avoid WORD ...] [--json]\nFinds shortest one-letter ladders in a small built-in couch-club word list. Use --neighbors to inspect sorted one-letter neighbors, --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
-    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via) }
+    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via, neighborsWord) }
+    if let neighborsWord {
+        if from != nil || to != nil || play || html != nil || via != nil || maxSteps != nil { throw LadderError.missingOption("--neighbors cannot be combined with solver options") }
+        return (neighborsWord, neighborsWord, false, false, nil, false, json, avoiding, nil, nil, neighborsWord)
+    }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
     if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
     if json && (play || html != nil) { throw LadderError.missingOption("--json cannot be combined with --play or --html") }
-    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via)
+    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via, neighborsWord)
 }
 
 func jsonEscape(_ value: String) -> String {
@@ -129,6 +141,11 @@ func jsonLadder(_ path: [String], maxSteps: Int?, via: String?) -> String {
     let limit = maxSteps.map(String.init) ?? "null"
     let waypoint = via.map { "\"\(jsonEscape($0))\"" } ?? "null"
     return "{\"schema_version\":1,\"from\":\"\(jsonEscape(path.first!))\",\"to\":\"\(jsonEscape(path.last!))\",\"via\":\(waypoint),\"steps\":\(path.count - 1),\"max_steps\":\(limit),\"words\":[\(words)]}"
+}
+
+func jsonNeighbors(_ word: String, _ neighbors: [String]) -> String {
+    let values = neighbors.map { "\"\(jsonEscape($0))\"" }.joined(separator: ",")
+    return "{\"schema_version\":1,\"word\":\"\(jsonEscape(word))\",\"neighbors\":[\(values)],\"count\":\(neighbors.count)}"
 }
 
 func htmlEscape(_ value: String) -> String { value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;") }
@@ -183,6 +200,16 @@ func selfTest() -> Bool {
 do {
     let options = try parse(Array(CommandLine.arguments.dropFirst()))
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
+    if let word = options.10 {
+        let listed = neighbors(of: word).filter { !options.7.contains($0) }
+        if options.6 {
+            print(jsonNeighbors(word, listed))
+        } else {
+            print("NEIGHBORS FOR \(word.uppercased()) · \(listed.count)")
+            if !listed.isEmpty { print(listed.joined(separator: "\n")) }
+        }
+        exit(0)
+    }
     if options.7.contains(options.0.lowercased()) { throw LadderError.avoidedEndpoint(options.0.lowercased()) }
     if options.7.contains(options.1.lowercased()) { throw LadderError.avoidedEndpoint(options.1.lowercased()) }
     if let via = options.9, options.7.contains(via) { throw LadderError.avoidedEndpoint(via) }
