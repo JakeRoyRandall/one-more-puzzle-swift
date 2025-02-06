@@ -13,10 +13,12 @@ swiftc -warnings-as-errors -O main.swift -o one-more-puzzle
 printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WARM --play
 ./one-more-puzzle --from COLD --to WARM --html ladder.html
 ./one-more-puzzle --from COLD --to WARM --json
+./one-more-puzzle --from COLD --to WARM --avoid CORD
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
 sh ../tests/test_html.sh
 sh ../tests/test_json.sh
+sh ../tests/test_avoid.sh
 ```
 
 The program uses Swift Foundation and no packages, network access, system dictionaries, or external data. Errors explain unknown words, mismatched lengths, non-ASCII input, and unreachable pairs.
@@ -26,3 +28,5 @@ With `--play`, submit one next word per line. `hint` suggests the next shortest-
 `--html FILE` exports a standalone printable newspaper-style ladder page with one tile per word and the changed letter highlighted in forest green. It works for three-letter, four-letter, and same-word ladders, refuses to overwrite an existing file unless `--force` is supplied, and cannot be combined with `--play`.
 
 `--json` prints one valid machine-readable object containing `schema_version`, `from`, `to`, `steps`, and the complete `words` array. It is mutually exclusive with `--play` and `--html`; the output describes this same curated shortest path and is not a dictionary or proof of linguistic optimality beyond the built-in word graph.
+
+Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the graph. Exclusions apply to text, JSON, HTML, play moves, and hints; unknown, non-ASCII, and endpoint exclusions are errors. Repeating a word is harmless and counts once. The list is intentionally small, so avoiding a bridge may make a pair unreachable.

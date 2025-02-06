@@ -7,6 +7,7 @@ let wordBank = [
 
 enum LadderError: LocalizedError {
     case missingOption(String), unknownWord(String), wrongLength, nonASCII, unreachable
+    case tooManyAvoid, avoidedEndpoint(String)
     var errorDescription: String? {
         switch self {
         case .missingOption(let option): return "missing \(option); try --from COLD --to WARM"
@@ -14,6 +15,8 @@ enum LadderError: LocalizedError {
         case .wrongLength: return "FROM and TO must have the same length"
         case .nonASCII: return "use simple ASCII letters for FROM and TO"
         case .unreachable: return "no ladder connects those words in the curated word list"
+        case .tooManyAvoid: return "at most 32 --avoid words are allowed"
+        case .avoidedEndpoint(let word): return "cannot avoid ladder endpoint " + word
         }
     }
 }
@@ -24,17 +27,19 @@ func neighbors(of word: String, in words: [String] = wordBank) -> [String] {
     }.sorted()
 }
 
-func ladder(from start: String, to goal: String, in words: [String] = wordBank) throws -> [String] {
+func ladder(from start: String, to goal: String, in words: [String] = wordBank, avoiding: Set<String> = []) throws -> [String] {
     let from = start.lowercased(), target = goal.lowercased()
     guard from.allSatisfy({ $0.isASCII && $0.isLetter }) && target.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
     guard from.count == target.count else { throw LadderError.wrongLength }
+    if avoiding.contains(from) { throw LadderError.avoidedEndpoint(from) }
+    if avoiding.contains(target) { throw LadderError.avoidedEndpoint(target) }
     guard words.contains(from) else { throw LadderError.unknownWord(from) }
     guard words.contains(target) else { throw LadderError.unknownWord(target) }
     if from == target { return [from] }
     var queue = [from], head = 0, parent: [String: String?] = [from: nil]
     while head < queue.count {
         let current = queue[head]; head += 1
-        for next in neighbors(of: current, in: words) where parent[next] == nil {
+        for next in neighbors(of: current, in: words) where !avoiding.contains(next) && parent[next] == nil {
             parent[next] = current; queue.append(next)
             if next == target {
                 var path = [target]; var cursor = target
@@ -46,8 +51,8 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank) 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool) {
-    var from: String?, to: String?, selfTest = false, play = false, html: String?, force = false, json = false; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>) {
+    var from: String?, to: String?, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(); var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
@@ -55,19 +60,29 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
         case "--self-test": selfTest = true
         case "--play": play = true
         case "--json": json = true
+        case "--avoid":
+            index += 1
+            guard index < arguments.count else { throw LadderError.missingOption("--avoid") }
+            let word = arguments[index].lowercased()
+            guard word.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
+            guard wordBank.contains(word) else { throw LadderError.unknownWord(word) }
+            if !avoiding.contains(word) {
+                if avoiding.count == 32 { throw LadderError.tooManyAvoid }
+                avoiding.insert(word)
+            }
         case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
         case "--force": force = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--play | --html FILE | --json] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--avoid WORD ...] [--play | --html FILE | --json] [--force]\nFinds a shortest one-letter ladder in a small built-in couch-club word list. Use --avoid to exclude curated words, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
-    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false) }
+    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false, avoiding) }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
     if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
     if json && (play || html != nil) { throw LadderError.missingOption("--json cannot be combined with --play or --html") }
-    return (start, goal, selfTest, play, html, force, json)
+    return (start, goal, selfTest, play, html, force, json, avoiding)
 }
 
 func jsonEscape(_ value: String) -> String {
@@ -98,7 +113,7 @@ func htmlLadder(_ path: [String]) -> String {
 """
 }
 
-func playGame(from start: String, to target: String) {
+func playGame(from start: String, to target: String, avoiding: Set<String>) {
     let from = start.lowercased(), target = target.lowercased()
     var history = [from], validMoves = 0, hints = 0
     print("COUCH CLUB PLAY · \(from.uppercased()) → \(target.uppercased())")
@@ -108,8 +123,8 @@ func playGame(from start: String, to target: String) {
         let command = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if command == "quit" || command == "q" { print("Session ended · \(validMoves) valid moves · \(hints) hints"); return }
         if command == "undo" || command == "u" { if history.count > 1 { history.removeLast(); print("Back to \(history.last!) · \(validMoves) valid moves") } else { print("Already at the start; nothing to undo.") }; continue }
-        if command == "hint" || command == "h" { do { let route = try ladder(from: history.last!, to: target); if route.count > 1 { print("Hint: try \(route[1])") } else { print("You are already there.") }; hints += 1 } catch { print("No hint route from here; undo to a previous word.") }; continue }
-        guard wordBank.contains(command), neighbors(of: history.last!).contains(command) else { print("Invalid move; choose a word in the bank differing by one letter. You have not advanced."); continue }
+        if command == "hint" || command == "h" { do { let route = try ladder(from: history.last!, to: target, avoiding: avoiding); if route.count > 1 { print("Hint: try \(route[1])") } else { print("You are already there.") }; hints += 1 } catch { print("No hint route from here; undo to a previous word.") }; continue }
+        guard !avoiding.contains(command), wordBank.contains(command), neighbors(of: history.last!).contains(command) else { print("Invalid move; choose a word in the bank differing by one letter. You have not advanced."); continue }
         history.append(command); validMoves += 1
         if command == target { print("VICTORY · \(validMoves) valid moves · \(hints) hints · \(history.joined(separator: " → "))"); return }
         print("Now at \(command) · \(validMoves) valid moves")
@@ -132,8 +147,10 @@ func selfTest() -> Bool {
 do {
     let options = try parse(Array(CommandLine.arguments.dropFirst()))
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
-    if options.3 { _ = try ladder(from: options.0, to: options.1); playGame(from: options.0, to: options.1); exit(0) }
-    let path = try ladder(from: options.0, to: options.1)
+    if options.7.contains(options.0.lowercased()) { throw LadderError.avoidedEndpoint(options.0.lowercased()) }
+    if options.7.contains(options.1.lowercased()) { throw LadderError.avoidedEndpoint(options.1.lowercased()) }
+    if options.3 { _ = try ladder(from: options.0, to: options.1, avoiding: options.7); playGame(from: options.0, to: options.1, avoiding: options.7); exit(0) }
+    let path = try ladder(from: options.0, to: options.1, avoiding: options.7)
     if options.6 { print(jsonLadder(path)); exit(0) }
     if let htmlPath = options.4 {
         if FileManager.default.fileExists(atPath: htmlPath) && !options.5 { throw NSError(domain: "OneMorePuzzle", code: 5, userInfo: [NSLocalizedDescriptionKey: "HTML file already exists; pass --force to overwrite"]) }
