@@ -12,6 +12,7 @@ assert r == {
     'schema_version': 1,
     'from': 'cold',
     'to': 'warm',
+    'via': None,
     'steps': 4,
     'max_steps': None,
     'words': ['cold', 'cord', 'card', 'ward', 'warm'],

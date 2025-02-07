@@ -15,6 +15,7 @@ printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WAR
 ./one-more-puzzle --from COLD --to WARM --json
 ./one-more-puzzle --from COLD --to WARM --avoid CORD
 ./one-more-puzzle --from COLD --to WARM --max-steps 4
+./one-more-puzzle --from COLD --to WARM --via CORD
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
 sh ../tests/test_html.sh
@@ -33,3 +34,5 @@ With `--play`, submit one next word per line. `hint` suggests the next shortest-
 Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the graph. Exclusions apply to text, JSON, HTML, play moves, and hints; unknown, non-ASCII, and endpoint exclusions are errors. Repeating a word is harmless and counts once. The list is intentionally small, so avoiding a bridge may make a pair unreachable.
 
 `--max-steps N` bounds the shortest path to `0..32` letter changes. A same-word puzzle succeeds with zero, while a route needing more steps is unreachable. In `--play`, undo restores the available budget; hints search only within the remaining steps, and an exhausted budget reports a clear message.
+
+`--via WORD` requires the path to visit one same-length curated word, using a visited-waypoint BFS state rather than joining two independent paths. The waypoint may equal either endpoint, and the requirement shares the avoid and max-step limits. JSON reports the waypoint; play victory and hints also require it, while undo naturally restores the visited state from history. Unknown or avoided waypoints are errors.
