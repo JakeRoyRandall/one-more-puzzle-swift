@@ -17,6 +17,7 @@ printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WAR
 ./one-more-puzzle --from COLD --to WARM --max-steps 4
 ./one-more-puzzle --from COLD --to WARM --via CORD
 ./one-more-puzzle --neighbors COLD --json
+./one-more-puzzle --reachable COLD --max-steps 2 --json
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
 sh ../tests/test_html.sh
@@ -39,3 +40,5 @@ Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the g
 `--via WORD` requires the path to visit one same-length curated word, using a visited-waypoint BFS state rather than joining two independent paths. The waypoint may equal either endpoint, and the requirement shares the avoid and max-step limits. JSON reports the waypoint; play victory and hints also require it, while undo naturally restores the visited state from history. Unknown or avoided waypoints are errors.
 
 `--neighbors WORD` is a standalone read-only explorer. It lists sorted one-letter neighbors from the curated bank, applies `--avoid`, and accepts `--json` for an object containing `schema_version`, `word`, `neighbors`, and `count`. It cannot be combined with route, play, HTML, waypoint, or max-step options; an empty list is valid.
+
+`--reachable WORD --max-steps N` is a standalone bounded explorer. It includes the start at distance 0, walks only up to the required `0..32` limit, excludes avoided words, and sorts results by shortest distance then word. JSON reports `schema_version`, `word`, `max_steps`, `reachable` entries, and `count`; the origin cannot be avoided.

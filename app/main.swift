@@ -28,6 +28,25 @@ func neighbors(of word: String, in words: [String] = wordBank) -> [String] {
     }.sorted()
 }
 
+func reachableWords(from start: String, maxSteps: Int, avoiding: Set<String>) -> [(String, Int)] {
+    var distances = [start: 0]
+    var queue = [start]
+    var head = 0
+    while head < queue.count {
+        let current = queue[head]
+        head += 1
+        let distance = distances[current]!
+        if distance >= maxSteps { continue }
+        for next in neighbors(of: current) where !avoiding.contains(next) && distances[next] == nil {
+            distances[next] = distance + 1
+            queue.append(next)
+        }
+    }
+    return distances.map { ($0.key, $0.value) }.sorted { left, right in
+        left.1 == right.1 ? left.0 < right.0 : left.1 < right.1
+    }
+}
+
 struct LadderState: Hashable {
     let word: String
     let visitedVia: Bool
@@ -69,8 +88,8 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank, 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?, String?) {
-    var from: String?, to: String?, via: String?, neighborsWord: String?, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?, String?, String?) {
+    var from: String?, to: String?, via: String?, neighborsWord: String?, reachableWord: String?, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
@@ -91,6 +110,14 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
             guard word.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
             guard wordBank.contains(word) else { throw LadderError.unknownWord(word) }
             neighborsWord = word
+        case "--reachable":
+            index += 1
+            guard index < arguments.count else { throw LadderError.missingOption("--reachable") }
+            guard reachableWord == nil else { throw LadderError.missingOption("duplicate --reachable") }
+            let word = arguments[index].lowercased()
+            guard word.allSatisfy({ $0.isASCII && $0.isLetter }) else { throw LadderError.nonASCII }
+            guard wordBank.contains(word) else { throw LadderError.unknownWord(word) }
+            reachableWord = word
         case "--self-test": selfTest = true
         case "--play": play = true
         case "--json": json = true
@@ -111,21 +138,26 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
             maxSteps = value
         case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
         case "--force": force = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE | --json] [--force]\n       one-more-puzzle --neighbors WORD [--avoid WORD ...] [--json]\nFinds shortest one-letter ladders in a small built-in couch-club word list. Use --neighbors to inspect sorted one-letter neighbors, --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE | --json] [--force]\n       one-more-puzzle --neighbors WORD [--avoid WORD ...] [--json]\n       one-more-puzzle --reachable WORD --max-steps N [--avoid WORD ...] [--json]\nFinds shortest one-letter ladders in a small built-in couch-club word list. Use --neighbors to inspect sorted one-letter neighbors, --reachable to list words within a finite step bound, --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
-    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via, neighborsWord) }
+    if selfTest && from == nil && to == nil { return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via, neighborsWord, reachableWord) }
+    if let reachableWord {
+        guard let maxSteps else { throw LadderError.invalidMaxSteps }
+        if from != nil || to != nil || play || html != nil || via != nil || neighborsWord != nil { throw LadderError.missingOption("--reachable cannot be combined with solver options") }
+        return (reachableWord, reachableWord, false, false, nil, false, json, avoiding, maxSteps, nil, nil, reachableWord)
+    }
     if let neighborsWord {
         if from != nil || to != nil || play || html != nil || via != nil || maxSteps != nil { throw LadderError.missingOption("--neighbors cannot be combined with solver options") }
-        return (neighborsWord, neighborsWord, false, false, nil, false, json, avoiding, nil, nil, neighborsWord)
+        return (neighborsWord, neighborsWord, false, false, nil, false, json, avoiding, nil, nil, neighborsWord, nil)
     }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
     if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
     if json && (play || html != nil) { throw LadderError.missingOption("--json cannot be combined with --play or --html") }
-    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via, neighborsWord)
+    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via, neighborsWord, reachableWord)
 }
 
 func jsonEscape(_ value: String) -> String {
@@ -146,6 +178,11 @@ func jsonLadder(_ path: [String], maxSteps: Int?, via: String?) -> String {
 func jsonNeighbors(_ word: String, _ neighbors: [String]) -> String {
     let values = neighbors.map { "\"\(jsonEscape($0))\"" }.joined(separator: ",")
     return "{\"schema_version\":1,\"word\":\"\(jsonEscape(word))\",\"neighbors\":[\(values)],\"count\":\(neighbors.count)}"
+}
+
+func jsonReachable(_ word: String, _ values: [(String, Int)], maxSteps: Int) -> String {
+    let entries = values.map { "{\"word\":\"\(jsonEscape($0.0))\",\"distance\":\($0.1)}" }.joined(separator: ",")
+    return "{\"schema_version\":1,\"word\":\"\(jsonEscape(word))\",\"max_steps\":\(maxSteps),\"reachable\":[\(entries)],\"count\":\(values.count)}"
 }
 
 func htmlEscape(_ value: String) -> String { value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;") }
@@ -200,6 +237,18 @@ func selfTest() -> Bool {
 do {
     let options = try parse(Array(CommandLine.arguments.dropFirst()))
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
+    if let word = options.11 {
+        let limit = options.8!
+        if options.7.contains(word) { throw LadderError.avoidedEndpoint(word) }
+        let values = reachableWords(from: word, maxSteps: limit, avoiding: options.7)
+        if options.6 {
+            print(jsonReachable(word, values, maxSteps: limit))
+        } else {
+            print("REACHABLE FROM \(word.uppercased()) · MAX \(limit) STEPS · \(values.count) WORDS")
+            for (value, distance) in values { print("\(distance) \(value)") }
+        }
+        exit(0)
+    }
     if let word = options.10 {
         let listed = neighbors(of: word).filter { !options.7.contains($0) }
         if options.6 {
