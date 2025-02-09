@@ -23,6 +23,7 @@ sh ../tests/test_play.sh
 sh ../tests/test_html.sh
 sh ../tests/test_json.sh
 sh ../tests/test_avoid.sh
+sh ../tests/test_challenges.sh
 ```
 
 The program uses Swift Foundation and no packages, network access, system dictionaries, or external data. Errors explain unknown words, mismatched lengths, non-ASCII input, and unreachable pairs.
@@ -42,3 +43,5 @@ Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the g
 `--neighbors WORD` is a standalone read-only explorer. It lists sorted one-letter neighbors from the curated bank, applies `--avoid`, and accepts `--json` for an object containing `schema_version`, `word`, `neighbors`, and `count`. It cannot be combined with route, play, HTML, waypoint, or max-step options; an empty list is valid.
 
 `--reachable WORD --max-steps N` is a standalone bounded explorer. It includes the start at distance 0, walks only up to the required `0..32` limit, excludes avoided words, and sorts results by shortest distance then word. JSON reports `schema_version`, `word`, `max_steps`, `reachable` entries, and `count`; the origin cannot be avoided.
+
+`--list-challenges` prints eight hand-curated IDs, titles, and step limits. `--challenge ID` selects one fixed from/to puzzle with its own optional waypoint, exclusions, and max-step bound, so those definition fields cannot be overridden. It supports the normal text, JSON, play, and HTML outputs; each fixture is validated through the same solver.
