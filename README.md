@@ -18,6 +18,7 @@ printf 'hint\ncord\ncard\nward\nwarm\n' | ./one-more-puzzle --from COLD --to WAR
 ./one-more-puzzle --from COLD --to WARM --via CORD
 ./one-more-puzzle --neighbors COLD --json
 ./one-more-puzzle --reachable COLD --max-steps 2 --json
+./one-more-puzzle --challenge quarantine --worksheet --html worksheet.html
 ./one-more-puzzle --self-test
 sh ../tests/test_play.sh
 sh ../tests/test_html.sh
@@ -45,3 +46,5 @@ Repeat `--avoid WORD` (up to 32 unique words) to remove curated words from the g
 `--reachable WORD --max-steps N` is a standalone bounded explorer. It includes the start at distance 0, walks only up to the required `0..32` limit, excludes avoided words, and sorts results by shortest distance then word. JSON reports `schema_version`, `word`, `max_steps`, `reachable` entries, and `count`; the origin cannot be avoided.
 
 `--list-challenges` prints eight hand-curated IDs, titles, and step limits. `--challenge ID` selects one fixed from/to puzzle with its own optional waypoint, exclusions, and max-step bound, so those definition fields cannot be overridden. It supports the normal text, JSON, play, and HTML outputs; each fixture is validated through the same solver.
+
+Add `--worksheet` to an `--html` export to hide interior answer words behind fixed-length blanks while keeping the start/end and challenge constraints visible. A collapsible answer key below the puzzle preserves a self-contained printable solution. Worksheet mode is mutually exclusive with JSON and play.

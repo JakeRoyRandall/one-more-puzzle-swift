@@ -114,8 +114,8 @@ func ladder(from start: String, to goal: String, in words: [String] = wordBank, 
     throw LadderError.unreachable
 }
 
-func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?, String?, String?, String?, Bool) {
-    var from: String?, to: String?, via: String?, neighborsWord: String?, reachableWord: String?, challengeID: String?, listChallenges = false, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
+func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?, Bool, Bool, Set<String>, Int?, String?, String?, String?, String?, Bool, Bool) {
+    var from: String?, to: String?, via: String?, neighborsWord: String?, reachableWord: String?, challengeID: String?, listChallenges = false, worksheet = false, selfTest = false, play = false, html: String?, force = false, json = false, avoiding = Set<String>(), maxSteps: Int?; var index = 0
     while index < arguments.count {
         switch arguments[index] {
         case "--from": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--from") }; from = arguments[index]
@@ -153,6 +153,7 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
         case "--self-test": selfTest = true
         case "--play": play = true
         case "--json": json = true
+        case "--worksheet": worksheet = true
         case "--avoid":
             index += 1
             guard index < arguments.count else { throw LadderError.missingOption("--avoid") }
@@ -170,39 +171,40 @@ func parse(_ arguments: [String]) throws -> (String, String, Bool, Bool, String?
             maxSteps = value
         case "--html": index += 1; guard index < arguments.count else { throw LadderError.missingOption("--html") }; html = arguments[index]
         case "--force": force = true
-        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE | --json] [--force]\n       one-more-puzzle --neighbors WORD [--avoid WORD ...] [--json]\n       one-more-puzzle --reachable WORD --max-steps N [--avoid WORD ...] [--json]\nFinds shortest one-letter ladders in a small built-in couch-club word list. Use --neighbors to inspect sorted one-letter neighbors, --reachable to list words within a finite step bound, --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
+        case "--help", "-h": print("Usage: one-more-puzzle --from WORD --to WORD [--via WORD] [--avoid WORD ...] [--max-steps N] [--play | --html FILE [--worksheet]] [--json] [--force]\n       one-more-puzzle --neighbors WORD [--avoid WORD ...] [--json]\n       one-more-puzzle --reachable WORD --max-steps N [--avoid WORD ...] [--json]\n       one-more-puzzle --list-challenges\n       one-more-puzzle --challenge ID [--play | --html FILE [--worksheet] | --json]\nFinds shortest one-letter ladders in a small built-in couch-club word list. Use --neighbors to inspect sorted one-letter neighbors, --reachable to list words within a finite step bound, --challenge for a fixed puzzle, --via for a same-length curated waypoint, --avoid to exclude curated words, --max-steps for a 0..32 path bound, --play to submit words interactively, --html to export a printable page, --worksheet for blanks plus an answer key, or --json for machine-readable output. Words are case-insensitive; no network or system dictionary is used."); exit(0)
         default: throw LadderError.missingOption("unknown option \(arguments[index])")
         }
         index += 1
     }
     if selfTest {
-        if from != nil || to != nil || via != nil || neighborsWord != nil || reachableWord != nil || challengeID != nil || listChallenges || play || html != nil || force || json || !avoiding.isEmpty || maxSteps != nil { throw LadderError.missingOption("--self-test cannot be combined with other options") }
-        return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via, neighborsWord, reachableWord, nil, false)
+        if from != nil || to != nil || via != nil || neighborsWord != nil || reachableWord != nil || challengeID != nil || listChallenges || worksheet || play || html != nil || force || json || !avoiding.isEmpty || maxSteps != nil { throw LadderError.missingOption("--self-test cannot be combined with other options") }
+        return ("cat", "cat", true, false, nil, false, false, avoiding, maxSteps, via, neighborsWord, reachableWord, nil, false, false)
     }
     if listChallenges {
         if arguments.count != 1 { throw LadderError.missingOption("--list-challenges cannot be combined with other options") }
-        return ("", "", false, false, nil, false, false, [], nil, nil, nil, nil, nil, true)
+        return ("", "", false, false, nil, false, false, [], nil, nil, nil, nil, nil, false, true)
     }
     if let challengeID {
         guard let selected = challenge(named: challengeID) else { throw LadderError.unknownWord(challengeID) }
-        if listChallenges || neighborsWord != nil || reachableWord != nil || selfTest || (play && html != nil) || (json && (play || html != nil)) { throw LadderError.missingOption("challenge has incompatible output or standalone options") }
+        if listChallenges || neighborsWord != nil || reachableWord != nil || selfTest || (play && html != nil) || (json && (play || html != nil)) || (worksheet && (html == nil || play || json)) { throw LadderError.missingOption("challenge has incompatible output or standalone options") }
         if from != nil || to != nil || via != nil || !avoiding.isEmpty || maxSteps != nil { throw LadderError.missingOption("--challenge cannot override from, to, via, avoid, or max-steps") }
-        return (selected.from, selected.to, false, play, html, force, json, selected.avoiding, selected.maxSteps, selected.via, nil, nil, selected.id, false)
+        return (selected.from, selected.to, false, play, html, force, json, selected.avoiding, selected.maxSteps, selected.via, nil, nil, selected.id, worksheet, false)
     }
     if let reachableWord {
         guard let maxSteps else { throw LadderError.invalidMaxSteps }
-        if from != nil || to != nil || play || html != nil || via != nil || neighborsWord != nil { throw LadderError.missingOption("--reachable cannot be combined with solver options") }
-        return (reachableWord, reachableWord, false, false, nil, false, json, avoiding, maxSteps, nil, nil, reachableWord, nil, false)
+        if from != nil || to != nil || play || html != nil || via != nil || neighborsWord != nil || worksheet { throw LadderError.missingOption("--reachable cannot be combined with solver options") }
+        return (reachableWord, reachableWord, false, false, nil, false, json, avoiding, maxSteps, nil, nil, reachableWord, nil, false, false)
     }
     if let neighborsWord {
-        if from != nil || to != nil || play || html != nil || via != nil || maxSteps != nil { throw LadderError.missingOption("--neighbors cannot be combined with solver options") }
-        return (neighborsWord, neighborsWord, false, false, nil, false, json, avoiding, nil, nil, neighborsWord, nil, nil, false)
+        if from != nil || to != nil || play || html != nil || via != nil || maxSteps != nil || worksheet { throw LadderError.missingOption("--neighbors cannot be combined with solver options") }
+        return (neighborsWord, neighborsWord, false, false, nil, false, json, avoiding, nil, nil, neighborsWord, nil, nil, false, false)
     }
     guard let start = from else { throw LadderError.missingOption("--from") }
     guard let goal = to else { throw LadderError.missingOption("--to") }
     if play && html != nil { throw LadderError.missingOption("--play cannot be combined with --html") }
     if json && (play || html != nil) { throw LadderError.missingOption("--json cannot be combined with --play or --html") }
-    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via, neighborsWord, reachableWord, nil, false)
+    if worksheet && (html == nil || play || json) { throw LadderError.missingOption("--worksheet requires --html and cannot combine with --play or --json") }
+    return (start, goal, selfTest, play, html, force, json, avoiding, maxSteps, via, neighborsWord, reachableWord, nil, worksheet, false)
 }
 
 func jsonEscape(_ value: String) -> String {
@@ -232,13 +234,15 @@ func jsonReachable(_ word: String, _ values: [(String, Int)], maxSteps: Int) -> 
 }
 
 func htmlEscape(_ value: String) -> String { value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "'", with: "&#39;") }
-func htmlLadder(_ path: [String], maxSteps: Int? = nil, challenge: Challenge? = nil) -> String {
+func htmlLadder(_ path: [String], maxSteps: Int? = nil, challenge: Challenge? = nil, worksheet: Bool = false, avoiding: Set<String> = [], via: String? = nil) -> String {
     let challengeBanner = challenge.map { item in
         let via = item.via.map { " · via " + htmlEscape($0) } ?? ""
         let avoid = item.avoiding.isEmpty ? "" : " · avoid " + item.avoiding.sorted().map(htmlEscape).joined(separator: ", ")
         return "<p class=\"challenge\"><b>Challenge: " + htmlEscape(item.title) + "</b> · " + htmlEscape(item.clue) + " · max " + String(item.maxSteps) + " steps" + via + avoid + "</p>"
     } ?? ""
-    let tiles = path.enumerated().map { offset, word in
+    let worksheetBank = worksheet ? "<p class=\"challenge\"><b>Allowed word bank:</b> " + wordBank.filter { $0.count == path.first!.count && !(challenge?.avoiding ?? avoiding).contains($0) }.joined(separator: ", ") + "</p>" : ""
+    let genericConstraints = worksheet && challenge == nil ? "<p class=\"challenge\"><b>Constraints:</b> max " + (maxSteps.map(String.init) ?? "unlimited") + " steps" + (via.map { " · via " + htmlEscape($0) } ?? "") + (avoiding.isEmpty ? "" : " · avoid " + avoiding.sorted().map(htmlEscape).joined(separator: ", ")) + "</p>" : ""
+    let answerTiles = path.enumerated().map { offset, word in
         let previous = offset > 0 ? Array(path[offset - 1]) : []
         let letters = Array(word).enumerated().map { index, letter in
             let marked = offset > 0 && index < previous.count && previous[index] != letter
@@ -246,8 +250,17 @@ func htmlLadder(_ path: [String], maxSteps: Int? = nil, challenge: Challenge? = 
         }.joined()
         return "<li><span class=\"step\">\(offset == 0 ? "START" : String(offset))</span><span class=\"word\">\(letters)</span></li>"
     }.joined(separator: "\n")
+    let worksheetTiles = path.enumerated().map { offset, word in
+        if offset > 0 && offset < path.count - 1 {
+            return "<li><span class=\"step\">\(offset)</span><span class=\"word blank\">\(String(repeating: "_", count: word.count))</span></li>"
+        }
+        return String(answerTiles.split(separator: "\n", omittingEmptySubsequences: false)[offset])
+    }.joined(separator: "\n")
+    let tiles = worksheet ? worksheetTiles : answerTiles
+    let answerWords = path.map(htmlEscape).joined(separator: " → ")
+    let answerKey = worksheet ? worksheetBank + genericConstraints + "<details><summary>Answer key</summary><p>\(answerWords)</p><ol>\(answerTiles)</ol></details>" : ""
     return """
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>One More Puzzle · \(htmlEscape(path.first!)) → \(htmlEscape(path.last!))</title><style> :root{--ink:#10271b;--green:#1c5b3a;--paper:#f6f2e7;--rule:#173b28}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Georgia,serif;background-image:repeating-linear-gradient(0deg,#10271b08 0,#10271b08 1px,transparent 1px,transparent 5px)}main{max-width:760px;margin:0 auto;padding:54px 34px}.mast{border-top:8px solid var(--green);border-bottom:3px solid var(--green);padding:18px 0 22px}.kicker{font:700 12px "Courier New",monospace;letter-spacing:.18em;color:var(--green)}h1{font-size:clamp(48px,9vw,88px);line-height:.82;letter-spacing:-.06em;margin:18px 0 12px}h1 em{color:var(--green);font-style:normal}.dek{font-size:18px;line-height:1.45;max-width:600px}.challenge{border-left:3px solid var(--green);padding-left:12px;font:13px/1.5 "Courier New",monospace}.badge{display:inline-block;border:2px solid var(--green);padding:8px 10px;font:700 11px "Courier New",monospace;transform:rotate(-2deg)}ol{list-style:none;margin:34px 0;padding:0;border-left:3px solid var(--green)}li{display:flex;align-items:center;gap:18px;padding:11px 0 11px 20px}.step{width:58px;color:var(--green);font:700 11px "Courier New",monospace}.word{font:700 clamp(30px,7vw,58px)/1 "Courier New",monospace;letter-spacing:.08em}.changed{color:white;background:var(--green);padding:0 .08em}.note{border-top:2px solid var(--green);padding-top:16px;font:12px/1.5 "Courier New",monospace}.foot{margin-top:42px;border-top:1px solid var(--rule);padding-top:12px;font:11px/1.5 "Courier New",monospace}@media print{body{background:#fff}main{padding:20px}.foot{margin-top:20px}}</style></head><body><main><header class="mast"><div class="kicker">ONE MORE PUZZLE · COUCH CLUB EDITION</div><h1>Change one<br><em>letter.</em></h1><p class="dek">A newspaper puzzle for a stay-at-home year. Follow the shortest route from <b>\(htmlEscape(path.first!.uppercased()))</b> to <b>\(htmlEscape(path.last!.uppercased()))</b>.</p>\(challengeBanner)<span class="badge">\(path.count - 1) STEPS</span></header><ol>\(tiles)</ol><p class="note">Green tiles mark the letter changed on each step. The word bank is a small curated puzzle set, not a complete English dictionary.</p><footer class="foot">Created retrospectively in September 2026 as a fictional 2020-inspired art project. No network or external assets.</footer></main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>One More Puzzle · \(htmlEscape(path.first!)) → \(htmlEscape(path.last!))</title><style> :root{--ink:#10271b;--green:#1c5b3a;--paper:#f6f2e7;--rule:#173b28}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Georgia,serif;background-image:repeating-linear-gradient(0deg,#10271b08 0,#10271b08 1px,transparent 1px,transparent 5px)}main{max-width:760px;margin:0 auto;padding:54px 34px}.mast{border-top:8px solid var(--green);border-bottom:3px solid var(--green);padding:18px 0 22px}.kicker{font:700 12px "Courier New",monospace;letter-spacing:.18em;color:var(--green)}h1{font-size:clamp(48px,9vw,88px);line-height:.82;letter-spacing:-.06em;margin:18px 0 12px}h1 em{color:var(--green);font-style:normal}.dek{font-size:18px;line-height:1.45;max-width:600px}.challenge{border-left:3px solid var(--green);padding-left:12px;font:13px/1.5 "Courier New",monospace}.badge{display:inline-block;border:2px solid var(--green);padding:8px 10px;font:700 11px "Courier New",monospace;transform:rotate(-2deg)}ol{list-style:none;margin:34px 0;padding:0;border-left:3px solid var(--green)}li{display:flex;align-items:center;gap:18px;padding:11px 0 11px 20px}.step{width:58px;color:var(--green);font:700 11px "Courier New",monospace}.word{font:700 clamp(30px,7vw,58px)/1 "Courier New",monospace;letter-spacing:.08em}.changed{color:white;background:var(--green);padding:0 .08em}.note{border-top:2px solid var(--green);padding-top:16px;font:12px/1.5 "Courier New",monospace}.foot{margin-top:42px;border-top:1px solid var(--rule);padding-top:12px;font:11px/1.5 "Courier New",monospace}@media print{body{background:#fff}main{padding:20px}.foot{margin-top:20px}}</style></head><body><main><header class="mast"><div class="kicker">ONE MORE PUZZLE · COUCH CLUB EDITION</div><h1>Change one<br><em>letter.</em></h1><p class="dek">A newspaper puzzle for a stay-at-home year. Follow the shortest route from <b>\(htmlEscape(path.first!.uppercased()))</b> to <b>\(htmlEscape(path.last!.uppercased()))</b>.</p>\(challengeBanner)<span class="badge">\(path.count - 1) STEPS</span></header><ol>\(tiles)</ol>\(answerKey)<p class="note">Green tiles mark the letter changed on each step. The word bank is a small curated puzzle set, not a complete English dictionary.</p><footer class="foot">Created retrospectively in September 2026 as a fictional 2020-inspired art project. No network or external assets.</footer></main></body></html>
 """
 }
 
@@ -293,7 +306,7 @@ func selfTest() -> Bool {
 do {
     let options = try parse(Array(CommandLine.arguments.dropFirst()))
     if options.2 { let passed = selfTest(); print(passed ? "self-tests passed: neighbors, stable BFS, cycles, same-word, unreachable, Unicode and length errors" : "self-tests failed"); exit(passed ? 0 : 1) }
-    if options.13 {
+    if options.14 {
         for item in challenges { print("\(item.id) · \(item.title) · max \(item.maxSteps)") }
         exit(0)
     }
@@ -328,7 +341,7 @@ do {
     if let htmlPath = options.4 {
         if FileManager.default.fileExists(atPath: htmlPath) && !options.5 { throw NSError(domain: "OneMorePuzzle", code: 5, userInfo: [NSLocalizedDescriptionKey: "HTML file already exists; pass --force to overwrite"]) }
         let selectedChallenge = options.12.flatMap(challenge(named:))
-        do { try htmlLadder(path, maxSteps: options.8, challenge: selectedChallenge).write(toFile: htmlPath, atomically: true, encoding: .utf8) } catch { throw NSError(domain: "OneMorePuzzle", code: 6, userInfo: [NSLocalizedDescriptionKey: "could not write HTML file: \(error.localizedDescription)"]) }
+        do { try htmlLadder(path, maxSteps: options.8, challenge: selectedChallenge, worksheet: options.13, avoiding: options.7, via: options.9).write(toFile: htmlPath, atomically: true, encoding: .utf8) } catch { throw NSError(domain: "OneMorePuzzle", code: 6, userInfo: [NSLocalizedDescriptionKey: "could not write HTML file: \(error.localizedDescription)"]) }
         print("HTML written to \(htmlPath) · \(path.count - 1) steps")
         exit(0)
     }
